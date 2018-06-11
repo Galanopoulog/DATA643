@@ -1,0 +1,236 @@
+---
+title: "Global Baseline Predictors and RMSE"
+author: "Georgia Galanopoulos"
+date: "June 12, 2018"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+# Background
+The purpose of this assignment is to predict ratings by 1) looking at just the raw averages across all users and 2) accounting for "bias" by normalizing across users and across items. The challenge presents itself by splitting one dataset into a training and testing subset and by working around missing entries.
+
+The data for building this recommender system can be found at http://nifty.stanford.edu/2011/craig-book-recommendations/ and was originally gathered with the intention of recommending books to high school seniors based on 55 novels and ratings from 86 students in Canada.The ratings for each book are given as: (-5: Hated, -3: Didn't Like, 0: Haven't Read, 1: Neutral, 3: Liked, 5: Loved) 
+
+
+# Data input
+## Loading libraries
+```{r results='hide', message=FALSE, warning=FALSE}
+library(splitstackshape)
+library(dplyr)
+library(caTools)
+library(Amelia)
+library(hydroGOF)
+library(knitr)
+```
+
+## Importing/Formatting datasets
+The datasets for the books and the ratings are from two different sources, so after importing them, they have to be combined to create one dataframe. The books dataset was originally one column formatted as (Author, Title) and therefore had to be split into two columns (Author and Title) as seen below. This was originally done with the intention of enhancing the recommendation system in case an author was included more than once, however each author is a unique entry, so it seemed more pertinent to just work with the titles.
+```{r}
+# grab the urls (there are 2: ratings and book titles)
+url1 = "http://nifty.stanford.edu/2011/craig-book-recommendations/ratings.txt"
+url2 = "http://nifty.stanford.edu/2011/craig-book-recommendations/books.txt"
+
+# read in the titles and move the authors into another column
+books = data.frame(read.delim(url2, header=F, sep="\t", stringsAsFactors = F))
+books = cSplit(books, "V1", ",")
+kable(head(books))
+```
+
+Directly importing the ratings dataset from the website resulted in some award formatting (where the odd rows were the name of the reader with all NA values following and the odd rows were the previous row's actual ratings).
+```{r}
+# read in the ratings
+ratings = data.frame(read.delim(url1, header=F, sep=" ", stringsAsFactors = F))
+kable(head(ratings))
+```
+
+To correct this, the even rows were extracted and the names in the odd rows were converted into a new column and attached to the ratings.
+```{r}
+# Split the ratings into odd and even rows
+odd = ratings %>% dplyr::filter(row_number() %% 2 == 1)
+odd = within(odd,  consumer <- paste(V1, V2, sep=" "))
+even = ratings %>% dplyr::filter(row_number() %% 2 == 0)
+colnames(even) = books$V1_2
+
+# final dataset
+rate = data.frame(cbind(odd$consumer, even))[,1:56]
+names(rate)[names(rate) == "odd.consumer"] = "reader"
+kable(head(rate))
+```
+
+For ease of understanding (making the dataset more intuitive), the values were changed and replaced from the scale of [-5, 5] to [1, 5] and, where previously a zero value was the equivalent of a "not read" response, "NA" became representative of "no rating".
+```{r}
+rate[rate == 0] = NA
+rate[rate == 3] = 4
+rate[rate == 1] = 3
+rate[rate == -5] = 1
+rate[rate == -3] = 2
+```
+
+Just looking at the structure of the dataset, two books' ratings (Hitchhiker's Guide and Watership Down) were input as character variables. They were subsequently changed to numerical values.
+```{r}
+kable(str(rate))
+rate$The.Hitchhiker.s.Guide.To.The.Galaxy = as.numeric(rate$The.Hitchhiker.s.Guide.To.The.Galaxy)
+rate$Watership.Down = as.numeric(rate$Watership.Down)
+```
+
+## Downsizing dataset
+The data has 86 readers and 55 novels. To narrow down the dataset, the first thing to look at was the number of missing values. The plot below shows that more than half of the books have too many NA entries to make accurate recommendations. In fact, every reader has not rated at least one book, making it necessary to determine which variables to retain based on the number of missing values.
+```{r}
+# Look at missing values
+missmap(rate, main = "Missing values vs Observed")
+```
+
+The next step was to order the number of NA values of readers by least to greatest and retain the top 10 most active readers. From there, 10 books with the least NA values were also retained, creating a 10 by 10 matrix of the most involved readers and the most reviewed novels. 
+```{r}
+# Count na values for readers
+rate$na_count = apply(rate, 1, function(x){ sum(is.na(x))})
+# Ordering na values and include only the top ten
+rates = head(rate[order(rate$na_count),],10)
+# Create new row for na count of books
+rates[11,] = colSums(is.na(rates))
+# Sort based on book na count
+rates_sort = rates[,order(rates[11,])]
+# Select only ten books
+final_rates = rates_sort[-11, -c(2,10,13:56)]
+kable(final_rates)
+```
+
+## Splitting into training and testing sets
+To create and compare the prediction ratings of the books, a training and test set were created. Values from the dataset were selected and removed to create the test set. The training set was to be the dataset but with the extracted test set values were replaced with NA's.
+```{r}
+# Selected testing values
+samples = rbind(c(1,10), c(2,9), c(3,8), c(4,7), c(5,6),
+                c(6,5), c(7,4), c(8,3), c(9,2), c(10,1))
+
+# Train set
+train = final_rates
+train[samples] = NA
+kable(train)
+
+# Test set
+test = as.numeric(final_rates[samples])
+test
+```
+
+
+# Tasks:
+## 1. Raw Average Approach
+### Raw Average
+The raw average of the training set is the mean rating for each user-item (reader-book) combination. This does not include the missing values (you don't convert them to 0 or something), so (if every item entry has NA's like this dataset) be mindful to work around them if need be.
+```{r}
+# Calculate Raw Average Rating for user-item combination
+raw_train = round(sum(colSums(train[,-11], na.rm = T))/(sum(colSums(!is.na(train[,-11])))), 3)
+raw_train
+
+raw_test = round(mean(test), 3)
+```
+
+### RMSE
+The Root Mean Square Error (RMSE) for the raw average rating is the square root of the average of the squared differences between the training set's values and the raw average. $RMSE =\sqrt{\frac{\Sigma(train - rawAvg)^2}{n}}$ The RMSE was calculated for the training and test set is calculated below. Lower values of RMSE indicate better fit.
+```{r}
+# Calculate RMSE of raw average
+matrix_RMSE = function(matrix){
+  matrix = select_if(matrix, is.numeric)
+  # matrix mean
+  matrix_mean = sum(colSums(matrix, na.rm = T))/(sum(colSums(!is.na(matrix))))
+  # square difference of error
+  matrix_rme = sum(colSums((matrix-matrix_mean)^2, na.rm = T))/(sum(colSums(!is.na(matrix))))
+  # RMSE
+  rmse = round(sqrt(matrix_rme),3)
+  return(rmse)
+}
+
+train_RMSE = matrix_RMSE(train)
+print(paste("Train set RMSE: ", train_RMSE))
+
+test_RMSE = round(sqrt(mean((test - raw_train)^2, na.rm =TRUE)), 3)
+print(paste("Test set RMSE: ", test_RMSE))
+```
+
+## 2. Baseline Approach
+### Bias
+Though the majority of the ratings in this dataset are 4 and 5 (as seen visually and through the raw average score of approximately 3.8), there are bound to be certain readers that are harsh judges and others that are generous. Some books may also have been perceived as having a higher level of entertainment than others. To account for this, the bias of each user (reader) and item (book) is calculated below. This bias can only be used with the training data. The test dataset was excluded.
+```{r}
+bias = function(matrix, item){
+  matrix = select_if(train, is.numeric)
+  if (item == T){
+    bias = round((colSums(matrix, na.rm = T)/colSums(!is.na(matrix)))-raw_train, 2)
+  } else{
+    bias = round((rowSums(matrix, na.rm = T)/rowSums(!is.na(matrix)))-raw_train, 2)
+  }
+  return(data.frame(bias))
+}
+
+user_bias = bias(train, T)
+user_bias
+
+item_bias = bias(train, F)
+cbind(train$reader,item_bias)
+```
+
+### Baseline Predictors
+The baseline predictors are predictors for every user and item that take into consideration the user and the item biases to better assume what the value for every user-item combination would be. $Baseline Predictors = Raw Average + User Bias + Item Bias$ Because some of the predictors exceeded the [1,5] rating range, any values above or below these limits were changed to highest (5) or lowest (1) value respectively.
+```{r}
+# Empty matrix
+baseline = matrix(, nrow = dim(user_bias)[1], ncol = dim(item_bias)[1])
+
+# Using rmse and biases, calculate baseline predictors
+for (i in 1:dim(user_bias)[1]){
+  item = t(as.matrix(bias(train, F)))
+  baseline[i, ] = round(user_bias[i,] + item + raw_train, 2)
+}
+
+rownames(baseline) = rownames(user_bias)
+colnames(baseline) = train$reader
+
+# Upper and lower prediction limits adjustment
+baseline[baseline > 5] = 5
+baseline[baseline < 1] = 1
+kable(baseline)
+```
+
+One thing to note was that the dimensions of the baseline predictor dataset (10x10 matrix) was different from the dimensions of the unique baseline predictor dataset (9x10 matrix). On closer inspection, the baseline predictors for "To Kill a Mockingbird" and "The Lord of the Flies" were identical. This seems odd since, in the training dataset, these two novels did not have similar ratings from similar users. However, both books had the same bias value, resulting in this similarity.
+
+### Baseline RMSE
+To determine the performance of the baseline predictors (especially in comparison to the raw average) the RMSE for baseline predictors was calculated for both the training and test set. This was done by taking the square root of the average of the squared differences between the training set's (and test set's) values and the user-item baseline predictors.
+```{r}
+# Calculate rmse for baseline for train and test
+train_base_rmse = round(sqrt(sum((train[,-11] - baseline)^2, na.rm=TRUE) / length(train[,-11][!is.na(train[,-11])])), 3)
+print(paste("Training set Baseline RMSE: ", train_base_rmse))
+
+test_base = baseline[samples]
+test_base_rmse = round(sqrt(sum((test - test_base)^2) / length(test)), 3)
+print(paste("Test set Baseline RMSE: ", test_base_rmse))
+```
+
+# Summary
+
+A comparison table was created to better see the difference between the results of the Raw Average approach and the baseline approach. This was done for both the training and the test set.
+```{r}
+# Summarize results
+# percent improvement
+train_imp = round((1-(train_base_rmse/matrix_RMSE(train)))*100, 2)
+test_imp = round((1-(test_base_rmse/test_RMSE))*100, 2)
+
+Raw_Average = c(raw_train, raw_test) 
+RMSE = c(train_RMSE, test_RMSE) 
+Baseline_RMSE = c(train_base_rmse, test_base_rmse)
+Improvement_Percent = c(train_imp, test_imp) 
+
+results = data.frame(Raw_Average, RMSE, Baseline_RMSE, Improvement_Percent)
+row.names(results) = c("Training Set", "Test Set")
+kable(results)
+```
+
+**Training vs Testing Set**
+
+Comparing the raw average scores, we see that the testing set can be deemed representative of the training set. From that alone, we can assume that the comparisons between the RMSE values for the raw-average and baseline approach will lead to similar conclusions. This seems to be the case for the Raw Average RMSE. The values for the training and testing set are similar (1.2 and 1.4, respectively), with the testing set having a slightly lesser fit (lower RMSE values are indicative of a better fit). This also is the case with the baseline results, with the training set having an RMSE of 1.2 and the training set having a value of 1.4. Overall, the training and testing sets have similar results.
+
+**Raw Average vs Baseline Performance**
+
+In both the training and the test set, the RMSE for the raw average was slightly higher. However, the values were so close to each other that the percent improvement for the training set was 1.29%, which was almost two-and-a-half times higher than the percent improvement of the test set (0.49%). This shows that using baseline predictors is a better predictive method of what the rating for a book will be by a particular user, but not by much. However, this can be attributed to the small range of rating values (from 1 to 5), or the sample size (10 books and 10 readers) or even that the selected sample had primarily values of 3 and above, meaning that the recommender system did not have a wide enough range of negative ratings in order to make a better distinction between the two approaches.
+
+
