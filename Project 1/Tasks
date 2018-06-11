@@ -2,6 +2,9 @@ Goal of Project 1:
 
 Find/Build a dataset (minimum requirement, at least five users, across at least five items, with some missing data).
 Encouraged to create a small, relatively dense “user-item” matrix as a subset.
+-- Dataset source: http://nifty.stanford.edu/2011/craig-book-recommendations/
+-- Ratings dataset: http://nifty.stanford.edu/2011/craig-book-recommendations/ratings.txt
+-- Titles dataset: http://nifty.stanford.edu/2011/craig-book-recommendations/books.txt
 
 Load data and create a user-item matrix.
 
