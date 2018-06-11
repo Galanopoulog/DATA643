@@ -1,0 +1,20 @@
+Goal of Project 1:
+
+Find/Build a dataset (minimum requirement, at least five users, across at least five items, with some missing data).
+Encouraged to create a small, relatively dense “user-item” matrix as a subset.
+
+Load data and create a user-item matrix.
+
+Break ratings into separate training and test datasets.
+
+Using training data, calculate the raw average (mean) rating for every user-item combination.
+
+Calculate the RMSE for raw average for both training data and test data.
+
+Using training data, calculate the bias for each user and each item.
+
+From the raw average, and the appropriate user and item biases, calculate the baseline predictors for every user-item combination.
+
+Calculate the RMSE for the baseline predictors for both training data and test data.
+
+Summarize results.
