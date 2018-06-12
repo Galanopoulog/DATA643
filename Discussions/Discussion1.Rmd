@@ -13,6 +13,8 @@ Choose one commercial recommender.
 1. Describe how you think it works (content-based, collaborative filtering, etc).
 2. Does the technique deliver a good experience or are the recommendations off-target?
 
+---
+
 Youtube
 
 1. I definitely think Youtube's system is hybrid (collaborated filtering and content-based). It takes what the user has already watched and uses collaborative filtering to pick videos with similar themes. And then, based on what you've selected out of those recommendations (and how long you've watched each), it looks at your content and either narrows down your interests or expands what you might be into.
@@ -25,6 +27,8 @@ Also choose one of the three non-personalized recommenders (below) and describe 
 1. Metacritic:  http://www.metacritic.com/about-metascores
 2. Rotten Tomatoes:https://www.rottentomatoes.com/about/
 3. IMDB Rating:  http://imdb.to/ 2ljPH90
+
+---
 
 Rotten Tomatoes
 
