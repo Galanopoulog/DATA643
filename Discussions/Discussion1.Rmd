@@ -40,6 +40,7 @@ https://www.washingtonpost.com/news/morning-mix/wp/2017/04/19/wisdom-of-the-crow
 2. Can you think of a similar example where a collective effort to alter the workings of content recommendations have been successful?
 3. How would you design a system to prevent this kind of abuse?
 
+---
 
 1. I don't think you can prevent this abuse, not fully, but I think that you can get people curious enough to wonder why a movie tanked before it even came out. One of the ways to handle this on a more general level is to know the people behind the data, so maybe focus on recommender system access and security.
 
