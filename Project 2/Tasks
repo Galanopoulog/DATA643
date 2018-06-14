@@ -1,0 +1,16 @@
+Start with an existing dataset of user-item ratings: (100,000 reviews) https://grouplens.org/datasets/movielens/
+
+Implement at least two of these recommendation algorithms:
+• Content-Based Filtering
+• User-User Collaborative Filtering
+• Item-Item Collaborative Filtering
+
+Evaluate and compare different approaches using:
+• Different algorithms
+• Normalization techniques
+• Similarity methods
+• Neighborhood sizes, etc...
+
+Provide:
+• At least one graph
+• A textual summary of your findings and recommendations
