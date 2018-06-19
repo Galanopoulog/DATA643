@@ -1,0 +1,315 @@
+---
+title: "Content-Based and Collaborative Filtering"
+author: "Georgia Galanopoulos"
+date: "June 19, 2018"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+The goal of this assignment is to implement, configure and evaluate recommender systems using different approaches. To achieve this, the assignment calls for using a user-item ratings dataset (from MovieLens in this case) and implement at least two recommendation algorithms:
+
+* Content-Based Filtering
+* User-User Collaborative Filtering
+* Item-Item Collaborative filtering
+
+The evaluation should compare different approaches, using different algorithms, normalization techniques, similarity methods, neighborhood sizes, etc.
+
+# Data input
+
+The MovieLens dataset was retrieved from the https://grouplens.org/datasets/movielens/ website using the small dataset with 100,000 ratings, 1,300 tags for 9,000 movies and 700 users. This is the most updated dataset (10/2016) with the most manageable size for R. The real challenge in that sense was creating a matrix of a size that R could handle.
+
+## Loading libraries/dataset
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(knitr)
+```
+
+The MovieLens matrix was created combining two datasets (movies and ratings). The movies dataset included the movieId, the title and the genres, while the ratings dataset included the userId, the movieId, the movie rating and a timestamp.
+```{r}
+movies = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Project%202/movies.csv", 
+                   header = TRUE, sep = ",", stringsAsFactors = FALSE)
+ratings = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Project%202/ratings.csv", 
+                    header = TRUE, sep =",", stringsAsFactors = FALSE)
+
+kable(head(movies))
+kable(head(ratings))
+```
+
+In order to create the matrix, both datasets had to be first downsized (for R to be able to handle) and then combined. The datasets with the most reviews and the most active users were preferable, so the data was downsized with that in mind. This resulted in the users with at least 20 reviews being included and the movies with at least 46 reviews. The dataset before being shaped into a matrix was formatted as such:
+```{r}
+x = head(data.frame(table(ratings$userId) %>% sort(decreasing =T)), 10000)
+
+colnames(x) = c("userId", "count")
+ratex = merge(ratings , x, by="userId")
+
+submovie = subset(movies, select = c("movieId", "title"))
+subrating = subset(ratex, select = c("userId","movieId", "rating"))
+
+prematrix = subset(merge(subrating, submovie, by="movieId"), select = c("userId","rating","title"))
+
+y = head(data.frame(table(prematrix$title) %>% sort(decreasing =T)), 500)
+colnames(y) = c("title", "count2")
+
+prematrix2 = subset(merge(prematrix, y, by="title"), select = c("title","userId","rating"))
+kable(head(prematrix2))
+```
+
+Originally, the matrix from the dataset was aimed to be slightly larger but due to formatting issues with the "realRatingMatrix", the matrix was further reduced to a 500x500 size. It was later in the assignment that more formatting issues presented themselves (in the evaluation section), and the matrix was further reduced in size.
+```{r}
+matrix = spread(prematrix2, title, rating)
+ex = as.matrix((matrix[-c(501:670),-1]))
+data = as(ex, "realRatingMatrix")
+data = data[rowCounts(data) > 30, colCounts(data) > 50]
+data
+```
+Despite the matrix having dimensions of 306 x 281, it still includes 22,003 ratings, which should be enough to create and evaluate the differences between recommender systems with varying algorithms.
+
+## Data Exploration
+
+From the heatmap below, we can see the top 30 rows and columns for the dataframe and how sparse the matrix is. The darker color is an indication of higher activity, meaning that the darker the rows, the higher the user's ratings were across all movies.
+```{r}
+image(data[rowCounts(data) > 150,
+colCounts(data) > 150], main = "Heatmap of the Top Users
+and Movies")
+```
+
+When looking at the ratings themselves, without taking into consideration the users or the movies, the majority of the ratings are 3-stars and above, with 4 stars being the most common grade.
+```{r}
+# Ratings
+qplot(getRatings(data), geom="histogram", main = "Histogram of Ratings", xlab = "Rating Scores", binwidth = 0.5, fill=I("cornflower blue"))
+```
+
+It is interesting to note that some of the results from the earlier histogram (particularly the frequency of awarding 5-star scores) is different when taking into consideration the movie. The average score per movie was primarily within the range of 3.5-4 stars. The other scores were significantly less, so much, in fact, that combining them into one category would not be enough to compete with the 3.5-star count. The presence of 0-2 star range is non-existant in this matrix.
+```{r}
+# Ratings per Movie
+qplot(colMeans(data), geom="histogram", main = "Histogram of Movie Ratings", xlab = "Rating Scores Per Movie", binwidth = 0.5, fill=I("FireBrick"))
+```
+
+Taking into consideration the users, the star-rating range goes as low as 2 stars and as high as 4.5. Even though, once again, the rating primarily granted is between the 3.5-4 star range, we notice that users are more lenient to give out 4.5 stars than could be assumed from the "Rating Scores Per Item" histogram.
+```{r}
+# Ratings per User
+qplot(rowMeans(data), geom="histogram", main = "Histogram of User Ratings", xlab = "Rating Scores Per User", binwidth = 0.5, fill=I("Plum"))
+```
+
+Though some users may give out low scores, it is not a usual case that one user consistently gives out low ratings (tangent topic: this may be used to help detect accounts for individual with the intention of sabotaging a recommender system). Overall, it appears that users typically rate movies as a 3.5 or 4 and it can be assummed that the users who typically rate movies highly (4.5 and above) either do so for movies with low ratings or do so for movies that are rated lower by a majority of other users (because the movies rating overall as a 4.5 is rather low).
+
+```{r}
+# Splitting training and testing
+values = sample(x = c(TRUE, FALSE), size = nrow(data),
+                      replace = TRUE, prob = c(0.8, 0.2))
+
+train = data[values, ]
+test = data[!values, ]
+```
+
+
+
+# Item_Item Collab
+
+Item-to-Item Collaborative Filtering takes into account the information of different users. By examining individuals' ratings of certain items, it calculates the similarity between items and recommends them. The closer the items scores, the more likely the items are to be recommended.
+
+## Building the Model
+
+Because the recommender system created is Item-to-Item, the "IBCF" method (Item Based Collaborative Filter method) was used, where the closeness between items was measured using the cosine.
+```{r}
+item_item = Recommender(data = train, method = "IBCF",
+                          parameter = list(k = 30, method = "Cosine"))
+item_item
+```
+
+
+## Making Recommendations
+
+A function was then created where inputing the user's Id number returned a list of six recommended movies. Taking the first user (User 1), the six recommendations were made below:
+```{r}
+# recommending
+n_recommended = 6
+predictions = predict(object = item_item, newdata = test,
+                       n = n_recommended)
+predictions
+
+item_pred = function(idNum){
+  user_x = predictions@items[[idNum]]
+  user_x = predictions@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+item_pred(1)
+```
+
+The top ten most recommended movies made overall by this recommender system are listed below in both the ordered table and the histogram:
+```{r}
+recc_matrix = sapply(predictions@items, function(x){
+colnames(data)[x]
+})
+
+number_of_items = data.frame(table(unlist(recc_matrix, use.names=FALSE)))
+sorted = number_of_items[order(number_of_items$Freq, decreasing = T),][1:10,]
+kable(sorted)
+
+ggplot(data=sorted, aes(x=Var1, y=Freq)) +
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_text(aes(label=Freq), color="red", size=3)+
+  theme_minimal()+
+  xlab("Movie Titles")+
+  coord_flip()
+```
+
+
+# User-User Collab
+
+User-to-User Collaborative Filtering takes into account the information of different users by examining the similarity between them and recommending items based on past ratings. The closer the users, the more likely a past item rated by one user (but not by another) is to be recommended.
+
+## Building the Model
+
+Because the recommender system created is User-to-User, the "UBCF" method (User Based Collaborative Filter method) was used, where the closeness between users was measured using the cosine.
+```{r}
+user_user = Recommender(data = train, method = "UBCF", parameter = list(k = 30, method = "Cosine"))
+user_user
+```
+
+## Making Recommendations
+
+As done previously with the Item-to-Item system, a function was  created where inputing the user's Id number returned a list of six recommended movies. Again, taking the first user (User 1), for comparison purposes, the six recommendations were made below:
+```{r}
+# recommending
+n_recommended = 6
+predictions2 = predict(object = user_user, newdata = test,
+                          n = n_recommended)
+predictions2
+
+user_pred = function(idNum){
+  user_x = predictions2@items[[idNum]]
+  user_x = predictions2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+
+user_pred(1)
+```
+
+The top ten most recommended movies made overall by this recommender system are listed below in both the ordered table and the histogram:
+```{r}
+recc_matrix2 = sapply(predictions2@items, function(x){
+colnames(data)[x]
+})
+
+number_of_items = data.frame(table(unlist(recc_matrix2, use.names=FALSE)))
+sorted = number_of_items[order(number_of_items$Freq, decreasing = T),][1:10,]
+kable(sorted)
+
+ggplot(data=sorted, aes(x=Var1, y=Freq)) +
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_text(aes(label=Freq), color="red", size=3)+
+  theme_minimal()+
+  xlab("Movie Titles")+
+  coord_flip()
+```
+
+Just by looking at the results of the User-to-User system, it is interesting to note that the recommendations for the same user are different between this approach and the Item-to-Item method. In addition, the User-to-User approach appears to recommend the same movies more frequently. This may be reflective of how popular movies are viewed or recommended simply because they are popular.
+
+# Comparing Models
+## Comparing IBCF and UBCF
+In order to test the models' accuracy, the first thing needed was to determine the minimum number of items rated by each user. The number of recommendations made in the training set was to be determined based on this (it must be a lower value).
+```{r}
+set.seed(101)
+
+minimum = min(rowCounts(data))
+minimum
+```
+
+An evaluation set was then created containing a training and testing set (testing included known and unknown sets). The k-fold validation approach was used (where chunks are taken out of the test set and each one is evaluated for accuracy) with k number of repetitions.
+```{r}
+evaluation = evaluationScheme(data = data, method = "cross-validation", k = 10, given = 10, goodRating = 3.5)
+
+evaluation
+
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+Using this evaluation method, the Item Based Collaborative Filter and the User Based Collaborative Filter methods were compared. A table including the Root Mean Square Errors (RMSE), the Mean Squared Errors (MSE) and the Mean Absolute Errors (MAE) is below to more easily compare the each method's performance.
+```{r}
+# Item
+item_model = Recommender(data = ev_train, method = "IBCF", parameter = list(method = "Cosine"))
+
+item_model_pred = predict(object = item_model, newdata = ev_known, n = 10, type = "ratings")
+
+item = calcPredictionAccuracy(x = item_model_pred, data = ev_unknown, byUser = FALSE)
+
+
+# User
+user_model = Recommender(data = ev_train, method = "UBCF", parameter = list(method = "Cosine"))
+
+user_model_pred = predict(object = user_model, newdata = ev_known, n = 10, type = "ratings")
+
+user = calcPredictionAccuracy(x = user_model_pred, data = ev_unknown, byUser = FALSE)
+
+
+# Comparison
+kable(rbind(item, user))
+```
+
+Across all three levels (RMSE, MSE and MAE), the user-based method scored lower and, hence, performed better.
+
+To get a closer look at the performance between the IBCF and UBCF methods, confusion matrices of the k-folds were created and are shown below.
+```{r}
+eval_sets = evaluationScheme(data = data, method = "cross-validation", k = 4, given = 10, goodRating = 3.5)
+
+I_results = evaluate(x = eval_sets, method = "IBCF", n = seq(10, 100, 10))
+kable(head(getConfusionMatrix(I_results)[[1]]))
+
+U_results = evaluate(x = eval_sets, method = "UBCF", n = seq(10, 100, 10))
+kable(head(getConfusionMatrix(U_results)[[1]]))
+```
+
+It appears that, overall, the UBCF method has a higher chance of correctly predicting True Positives, but the IBCF has a higher chance of correctly predicting False Negatives. Also, the UBCF has an overall higher precision and recall than the IBCF.
+
+The ROC plots of the IBCF and UBCF performance are R below for comparison.
+```{r}
+plot(I_results, annotate = TRUE, main = "ROC curve of IBCF")
+plot(U_results, annotate = TRUE, main = "ROC curve of UBCF")
+```
+
+Just from looking at the ROC curves, the performance between the two methods appears to have similar results. However, the UBCF approach has a higher TPR and a slight curve between the 10 and 40  mark, which gives it an edge over the IBCF method.
+
+## Comparing Different Model Approaches
+
+Beyond the IBCF-by-Cosine and UBCF-by-Cosine approach, there are other algorithms that can be used to measure distance between users or items and to make recommendations. The Pearson Correlation can be used as measure of distance instead of Cosine. Recommendations can be made at random. Recommendations can also be made based on which items are most popular. Each of these approaches (IBCF by Pearson, UBCF by Pearson, Random and Popular) can be evaluated and compared to the already measured IBCF by Cosine and UBCF by Cosine.
+```{r}
+mult_models = list(
+  IBCF_cos = list(name = "IBCF", param = list(method = "Cosine")),
+  IBCF_pearson = list(name = "IBCF", param = list(method = "pearson")),
+  UBCF_cos = list(name = "UBCF", param = list(method = "Cosine")),
+  UBCF_pearson = list(name = "UBCF", param = list(method = "pearson")),
+  Random = list(name = "RANDOM", param = NULL),
+  Popular = list(name = "POPULAR", param = NULL)
+)
+
+# Testing models
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+```
+
+The ROC and Precision/Recall plots below show the performance of each of the models.
+```{r}
+# Plotting models
+plot(models, annotate = T, legend="topleft")
+plot(models, "prec/rec", annotate = F, main="Precision/Recall", legend="topright")
+```
+
+In both plots, the "Popular" model was surprisingly the one with the best performance. For both the IBCF and the UBCF methods, the Pearson correlation appeared to be the better approach in terms of measuring distance between items or users. In addition, the UBCF approach performed better than the IBCF approach, regardles of metric (Pearson or cosine). The random approach did not perform well, which was not unexpected, however, seeing the results side by side, it is interesting how the IBCF cosine scored just as low.
+
+# Conclusion
+
+The best approach using this downsized MovieLens dataset was by recommending Popular movies. That being said, this may have been the result of the downsizing method since the most reviewed movies were the ones retained for evaluation purposes. If that is indeed the case, then the next best approach to consider is the User-to-User Collaborative Filtering algorithm (using the Pearson Correlation as a measurement of distance between users). When viewing the results by comparing RMSE, MSE and MAE values, the UBCF method performed better on all accounts. This was further noted on the ROC plots in the "Comparing Different Model Approaches" section, where the IBCF results were almost as low as randomly selecting movies. The reason for the downsizing being done the way it was can primarily be attributed to the need for guaranteeing a large enough pool of entries in a rather sparse matrix. It will be interesting to note whether these results hold up in a setting where users and movies weren't specifically picked for their higher traffic in terms of ratings.
+
+
+
+
+
+
+
