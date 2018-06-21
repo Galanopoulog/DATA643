@@ -1,0 +1,40 @@
+---
+title: "DATA 643 - Discussion 2"
+author: "Georgia Galanopoulos"
+date: "June 21, 2018"
+---
+## PairRDDFunctions
+#### Watch the following talk https://www.youtube.com/watch?v=3LBgiFch4_g and summarize what you found to be the most important or interesting points.
+
+I think one of the points that really stood out to me in this video was the mention of "PairRDDFunctions". Christopher Johnson dedicated an entire slide to them as one of the things he and his team learned along the way, but never really went into detail as to why they were so important. After looking into this topic, it's more obvious that these are functions that helped aggregate data and it makes sense why there were mentioned (they must have really cut down on time/lines of code and increased efficiency). I probably was intrigued at first because I wasn't really familiar with RDD's before this video. That being said, a couple of things I learned:
+
+**1. RDDs and Pair RDDs are not two different things.**
+
+A "Pair RDD" is an RDD of pairs. Kind of like how a Tuples Dataframe is a Dataframe of tuples. (We're gonna ignore here that there is a difference between an RDD and a Dataframe). A "Pair RDD" would simply be an RDD that holds a collection of pairs (key, value). How to go about creating them depends on whether you're using Scala, Python or Java.
+
+**2. So, efficiency. Got it. But why pairs?**
+
+It turns out, pairs is the easiest way to organize large chunks of data. Regardless of how much data (nested or otherwise) you start with, most methods end up revolving around using a "key" value to reduce/compute/join/etc the corresponding "value" value. Pair RDDs let you do special operations *per key* in parallel. And they also allow for grouping by keys across the network.
+
+
+**3. Partitioning is important. It affects performance.**
+
+The data within an RDD is split into partitions. They are super rigid. Data in the same partition is always in the same machine (though each machine can have more than one partition). Customized partitioning is done based on keys, so if you want to customize partitioning, this is **only possible with Pair RDDs**. Having the right partitioning can reduce "shuffling" (data moving through the network), which can prevent latency problems. Lucky for us, one of the PairRDDFunctions is ".partitionBy()" which performs hash-partitioning (type of partitioning that spreads data evenly across partitions based on the keys).
+
+**4. Why such an emphasis on these functions?**
+
+I have no idea. I'm guessing it's probably because Spark seemed to gain traction around 2014 (coincidentally, the year the Spark Summit youtube video was uploaded), so maybe this was a relatively new thing and Christopher Johnson was like, "Hey. Guys. These functions will save your life."
+
+Overall, I feel like that slide mislead me a bit in terms of importance, but I definitely learned a lot by just looking into this topic. No regrets here.
+
+**References**
+
+* https://www.safaribooksonline.com/library/view/learning-spark/9781449359034/ch04.html "Working with Key/Value Pairs"
+
+* https://www.youtube.com/watch?v=ei-dhfYHl9M "Pair RDDs"
+
+* https://www.youtube.com/watch?v=vCg3QcvHfWk&t=816s "Transformations and Actions on Pair RDDs"
+
+* https://www.youtube.com/watch?v=kbQmZiT1gnA "Shuffling: What it is and why it's Important"
+
+* https://www.youtube.com/watch?v=AK1khvHMUvE&t=282s "Partitioning"
