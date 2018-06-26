@@ -1,0 +1,158 @@
+---
+title: "Matrix Factorization Methods"
+author: "Georgia Galanopoulos"
+date: "June 26, 2018"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+The goal of this assignment is to implement a matrix factorization method (SVD or ALS) in the context of a recommender system.
+
+# Data input
+
+The dataset used was the MovieLens dataset, previously used in another assignment for content-based collaborative filtering. This dataset was retrieved from the https://grouplens.org/datasets/movielens/ website using the small dataset with 100,000 ratings, 1,300 tags for 9,000 movies and 700 users. Because the past challenge was creating a matrix of a size that R could handle, this assignment does not filter the users or movies based on traffic. A different approach was taken this time in order to ensure more accurate results (ones that weren't skewed due to the popularity of certain items).
+
+## Loading libraries/dataset
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(reshape2)
+library(knitr)
+```
+
+The MovieLens matrix was created combining two datasets (movies and ratings). The movies dataset included the movieId, the title and the genres, while the ratings dataset included the userId, the movieId, the movie rating and a timestamp.
+```{r}
+movies = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Project%202/movies.csv", 
+                   header = TRUE, sep = ",", stringsAsFactors = FALSE)
+ratings = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Project%202/ratings.csv", 
+                    header = TRUE, sep =",", stringsAsFactors = FALSE)
+kable(head(ratings))
+kable(head(movies))
+```
+
+When the rating and movies dataframes were combined, the new dataframe (from which the matrix will be formed) was created. This dataframe contained only the title, the userId and the rating.  
+```{r}
+movRate = merge(movies, ratings, by = "movieId")
+new = subset(movRate, select = c("title", "userId", "rating"))
+new = unique(new)
+kable(head(new))
+
+matrix = acast(new, userId~title, value.var="rating", fun=sum)
+```
+
+One thing to note, because of R's acast() function (the function that turns the dataframe into a matrix), all missing values were automatically turned into zeroes. The final matrix was particularly large with 671 users and 9064 movies. In order to avoid overloading R while also avoiding the filtering method, a random sample of both users and movies was taken to create the downsized matrix. This matrix included 200 users and 3000 movies.
+```{r}
+premat = as(matrix, "realRatingMatrix")
+data = premat[sample(671,200), sample(9064, 3000)]
+data
+```
+
+# Data Exploration
+
+Creating plots of the ratings distributions can help understand a lot of things, among those being what constitutes as a good rating. So, taking a look at the overall ratings, the majority of them were 4 stars, with the most of the votes around the 3-5 star range.
+```{r}
+# Ratings
+qplot(new$rating, geom="histogram", main = "Histogram of Ratings", xlab = "Rating Scores", binwidth = 0.5, fill=I("cornflower blue"))
+```
+
+A slightly different story was told when looking at the average score per movie. The majority of the ratings were 3.5, with a lot less emphasis around the 4.5-5 star rating than previously shown. The majority of the movies were rated between as 3-4 stars.
+```{r}
+# Ratings per Movie
+new2 = new %>% group_by(title) %>%
+  summarise(count = mean(rating))
+qplot(new2$count, geom="histogram", main = "Histogram of Movie Ratings", xlab = "Average Rating Scores Per Movie", binwidth = 0.5, fill=I("FireBrick"))
+```
+
+When looking at the average rating each of each user, very few persistently gave low (2.5 stars and below) and very few give high (5 stars) scores to movies. The majority lay between the 3.5-4 star range, with more users granting 3 stars than 4.5 stars.
+```{r}
+# Ratings per User
+new3 = new %>% group_by(userId) %>%
+  summarise(count = mean(rating))
+qplot(new3$count, geom="histogram", main = "Histogram of User Ratings", xlab = "Average Rating Scores Per User", binwidth = 0.5, fill=I("Plum"))
+```
+
+Because the downsizing approach taken this time did not filter the movies/users with the most activity, it was interesting to compare the results to the past assignment. Interestingly, the plots showed very little difference in the ratings, ratings per movie and ratings per user histograms. With this sampling method, though, the results seemed more well-rounded by including more extreme (1 and 5 star) ratings.
+
+After looking at the plots, the data was split into training and test sets (sizes of 80% and 20% respectively).
+```{r}
+evaluation = evaluationScheme(data, method="split", train=0.8, given=10, goodRating=3.5)
+
+#Evaluation datasets
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+# SVD
+
+The Singlular Value Decomposition (SVD) of a matrix A is the factorization of A into the product of three matrices so that $A=UDV^T$. Here, matrices U and V are orthonormal and matrix D is a diagonal with positive real values. To give an idea of the mentality behind this approach, a random sparse matrix was created.
+```{r}
+example = as.matrix(data.frame(c(1,3,4,0), c(1,2,4,0), c(0,0,0,5)))
+example
+```
+
+Performing a Singular Value Decomposition creates the three U, V and D matrices. The D matrix tells us that the third variable has less strength that the first and second, so it can be set to zero and effectively removed from the U and V matrices. This in turn reduces the original matrice's size without signifcantly affecting the results.
+```{r}
+svd(example)
+```
+
+Considering this approach, the SVD method in the recommenderlab package was used on the training set to get in predicted ratings for users and movies. A sample of this is below.
+
+```{r}
+svd_train = Recommender(ev_train, "SVD")
+svd_preds = predict(svd_train, ev_known, type = "ratings")
+getRatingMatrix(svd_preds[c(1,9,17,25,33),1:5])
+```
+
+
+# Comparison
+
+In the previous assignment that used the same dataset, the results showed that the highest performing techniques were the User-to-User Collaborative Filter with Pearson correlation (items were recommended based on similar users) and the Popular method (the most popular items were recommended). Under the assumption reinforced by the plots that the filtering method did not skew the results, the UBCF and Popular methods were compared against the SVD results.
+
+The table below shows that the SVD performed better than the UBCF approach, but was slightly less accurate than the Popular method. This result remains consistent across all values (RMSE, MSE and MAE). 
+```{r}
+# User-User
+ubcf_train = Recommender(ev_train, "UBCF")
+ubcf_preds = predict(ubcf_train, ev_known, type = "ratings")
+
+# Popular
+pop_train = Recommender(ev_train, "POPULAR")
+pop_preds = predict(pop_train, ev_known, type = "ratings")
+
+
+accuracy = rbind(
+  SVD = calcPredictionAccuracy(svd_preds, ev_unknown),
+  UBCF = calcPredictionAccuracy(ubcf_preds, ev_unknown),
+  POPULAR = calcPredictionAccuracy(pop_preds, ev_unknown)
+  )
+
+kable(as.data.frame(accuracy))
+```
+
+The ROC and Precision/Recall plots below show the performance of each of the models.
+```{r}
+eval_sets = evaluationScheme(data = data, method = "cross-validation", k = 4, given = 10, goodRating = 3.5)
+
+mult_models = list(
+  UBCF = list(name = "UBCF", param = list(method = "pearson")),
+  Popular = list(name = "POPULAR", param = NULL),
+  SVD = list(name = "SVD", param = NULL)
+)
+
+# Testing models
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+
+# Plotting models
+plot(models, annotate = T, legend="topleft")
+plot(models, "prec/rec", annotate = F, main="Precision/Recall", legend="topright")
+```
+
+Interestingly, unlike what was expected from the accuracy table above, the SVD model did not perform as well as expected compared to the UBCF and Popular model. Once again, the Popular model performed the best, however, in terms of Precision/Recall (and looking at the ROC curves), the SVD model was significanlty below the Popular model's. 
+
+# Conclusion
+
+The best approach using this downsized MovieLens dataset was, once again, by recommending Popular movies. That being said, the Singular Value Decomposition approach did not perform poorly. When viewing the results by comparing RMSE, MSE and MAE values, the SVD method performed slightly beneath the Popular one, with the UBCF lagging further behind. Though both the ROC and Precision/Recall plots showed the SVD underperforming (even to the UBCF), the SVD method would be my second choice after the Popular approach based on the results of the accuracy table.
