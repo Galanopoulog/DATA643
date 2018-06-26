@@ -1,0 +1,8 @@
+Datasets found:
+https://grouplens.org/datasets/movielens/
+or https://github.com/Galanopoulog/DATA643/tree/master/Project%202 (csv's)
+
+Task:
+Implement a matrix factorization method—such as singular value decomposition (SVD) or Alternating Least Squares (ALS)
+in the context of a recommender system. Can start with an existing recommender system written by yourself 
+or someone else (cite source).
