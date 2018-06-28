@@ -1,0 +1,44 @@
+---
+title: "DATA 643 - Discussion 3"
+author: "Georgia Galanopoulos"
+date: "June 28, 2018"
+output:
+  html_document
+---
+**In what ways do you think Recommender Systems reinforce human bias?**
+
+It is my belief that recommender systems amplify conclusions drawn before the algorithm was written. I think I read/heard from somewhere that a lie repeated enough times can make the audience believe it, despite proof rallying against the lie (and the irony that the way I started that sentence sounds shifty is not lost on me). Essentially, repetition is key. If recommender systems work on a particular biased platform, it reinforces that platform simply by existing.
+
+**Do you think recommender systems reinforce or help to prevent unethical targeting or customer segmentation?**
+
+Fundamentally, it seems more obvious that they reinforce unethical targetic. Machines don't have a concept of "ethics" to fight against and human bias can be unconscious (implicit bias). This seems pretty evident in the sense that bias is a huge concern when creating algorithms. If recommender systems didn't reinforce segmentation and unethical targeting, I'm pretty sure at least a standard would have been created by which targeting would be measured against.
+
+That being said, the issue is very convoluted and seems to be rooted in psychology. For my examples, I'm using the police/justice system to show human bias in algorithms:
+
+
+
+### Re-Offending
+https://www.propublica.org/article/how-we-analyzed-the-compas-recidivism-algorithm
+
+This blog does an analysis on an algorithm used to determine a criminal defendant's likelihood of re-offending (recidivism). It's really hard to read through this and not conclude through the analysis and the mentions of past research pointing to similar conclusions that human bias played a major role in the creation of this algorithm.
+
+"Black defendants were twice as likely as white defendants to be misclassified as a higher risk of violent recidivism, and white recidivists were misclassified as low risk 63.2 percent more often than black defendants."
+
+When you've got numbers that high and the same program has been used since the first mentioned study (2013) up until the article was published (2016), several things could be attributed to the results: negligence (someone should have worked on it more, right?), bias (race genuinely is believed to be an important factor despite the results) or other variables (I can't think of any at this point, maybe the data involved in training the algorithm led to skewed results?).
+
+I'm leaning towards human bias.
+
+### Policing
+https://rss.onlinelibrary.wiley.com/doi/full/10.1111/j.1740-9713.2016.00960.x
+
+And since I mentioned human bias, I'm also citing this article because it brings up some really interesting points regarding how the data is collected and the psychology behind the weights. This paper refers to predictive policing systems using biased data, the results of which included people being placed on a department's "heat list" based on where they live (which in many cases is tied to their race).
+
+A couple of interesting points that are brought up:
+
+"Police databases are not a complete census of all criminal offences, nor do they constitute a representative random sample. Empirical evidence suggests that police officers - either implicitly or explicitly - consider race and ethnicity in their determination of which persons to detain and search and which neighbourhoods to patrol."
+
+"Crimes that occur in locations frequented by police are more likely to appear in the database simply because that is where the police are patrolling."
+
+"Bias in police records can also be attributed to levels of community trust in police, and the desired amount of local policing - both of which can be expected to vary according to geographic location and the demographic make-up of communities. These effects manifest as unequal crime reporting rates throughout a precinct. With many of the crimes in police databases being citizen-reported, **a major source of bias may actually be community-driven rather than police-driven**. How these two factors balance each other is unknown and is likely to vary with the type of crime. Nevertheless, it is clear that police records do not measure crime. They measure some complex interaction between criminality, policing strategy, and community-police relations."
+
+So, maybe one approach to prevent bias is to actively look through it by analysis the data. And, I think this point brings about a bit of a conundrum, because we were somewhat forewarned by this video (https://www.youtube.com/watch?v=MqoRzNhrTnQ) that doing analysis on data to create a recommender system can be biased in and of itself, but not doing research may allow bias present in the data to permeate throughout the algorithm.
