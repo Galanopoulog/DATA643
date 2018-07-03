@@ -11,8 +11,6 @@ If you would like to use one of the datasets you have already worked with, you s
 The overall goal, however, will be to produce quality recommendations by extracting insights from a large dataset.
 You may do so using Spark, or another distributed computing method, OR by effectively applying one of the more advanced mathematical
 techniques we have covered. There is no preference for one over the other, as long as your recommender works!
-The planning document should be written up and published as a notebook on GitHub or in RPubs.
-Please submit the link in the Unit 4 folder, due Thursday, July 5.
 
 [2] Presentation
 Make a five-minute presentation of your system.
@@ -23,3 +21,6 @@ a certain complexity using another tool.
 
 [3] Implementation
 In this final project deliverable, you’ll build out the system that you describe in your planning document.
+
+
+
