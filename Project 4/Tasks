@@ -1,0 +1,12 @@
+Dataset found:
+http://jmcauley.ucsd.edu/data/amazon/links.html
+Digital Music - "ratings only" dataset
+
+Tasks:
+1. Compare the accuracy of at least two recommender system algorithms against offline data
+2. Implement support for at least one business or user experience goal (increased serendipity, novelty, or diversity)
+3. Compare and report on any change in accuracy before and after you’ve made the change in #2
+4. Discuss:
+  a. one or more additional experiments that could be performed and/or metrics that 
+     could be evaluated only if online evaluation was possible
+  b. Briefly propose how to design a reasonable online evaluation environment
