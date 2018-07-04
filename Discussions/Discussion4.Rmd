@@ -1,0 +1,32 @@
+---
+title: "DATA 643 - Discussion 4"
+author: "Georgia Galanopoulos"
+date: "July 5, 2018"
+output:
+  html_document
+
+---
+### Mitigating the Harm of Recommender Systems
+
+**Read one or more of the articles below and consider how to counter the radicalizing effects of recommender systems or ways to prevent algorithmic discrimination.**
+
+* https://www.wired.com/story/creating-ethical-recommendation-engines/
+
+* https://www.nytimes.com/2018/03/10/opinion/sunday/youtube-politics-radical.html 
+
+* http://goldberg.berkeley.edu/pubs/sanjay-recsys-v10.pdf
+
+---
+
+The first thing to understand before trying to counter radicalization in recommender systems is what radicalization is and how it works. I think that begins with understanding that there is a difference between "extremism" and "radicalization." The terms are used interchangeably because they describe attitudes that deviate from society's norm. But they are not the same. Extremism is more along the lines of a belief/support of far-reaching changes in society that **pose a threat to the democratic order**, while radicalization is the development of ideas that are fundamentally different from an individual's educational environment or disagree with the mainstream. Today, though, radicalization is more associated with "terrorist recruitment." 
+
+These definitions may seem somewhat benign (except for the terrorist one) because they only pertain to beliefs. It is when violence comes into play that this becomes an issue. So, what lies at the heart of radicalization? "The lack of integration and the identification with other groups and values have proved to be among its key drivers." [1] Also,"Any terrorist...had a highly over simplified view of the world, which they saw in black and white terms. Education robs you of that simplification and certitude. Education is the best possible antidote to radicalization." [1]
+
+So, what does this mean for recommender systems?
+
+Personally, I think that it means to not ban ideas that go against the norm. Presenting some "extremist" viewpoints may be healthy because they allow diversity and may prevent individuals from being forced to join "radical" groups in their search for a safe space to express their opinions. That being said, I think a scale should be created, some sort of measurement to quantify how extreme or radical an idea is and, if it reaches a certain violent point, exclude the content. If the content is not violent, maybe require recommendations of different perspectives of the topic to make it less "black and white." This becomes difficult with topics that are sensitive to teens (like the first article mentioned, suicide and pro-anorexia topics) because attitudes can be like viruses, contagious. It is my understanding that the key to mitigate radicalization is diversity and the key to diversity is to somehow prevent groups with radical ideas from forming cliques.
+
+
+References:
+
+[1] http://www.thehagueinstituteforglobaljustice.org/wp-content/uploads/2016/10/Countering-Preventing-Radicalization-Education.pdf
