@@ -1,0 +1,16 @@
+---
+title: "Data 643 - Final Project Proposal"
+author: "Georgia Galanopoulos"
+date: "July 9, 2018"
+output:
+  html_document
+---
+###Book Recommendation System
+
+The aim of this final project is to build a recommender system and produce quality recommendations by extracting insights from a large dataset, one consisting of at least one million ratings or at least ten thousand users and ten thousand items.
+
+The dataset used is the Book-Crossing dataset retrieved from http://www2.informatik.uni-freiburg.de/~cziegler/BX/.  This dataset is a compilation of user information, book information and book ratings mined in August-September of 2004 from the Book-Crossing community at http://www.bookcrossing.com/. It contains 278,858 users, 271,379 books and 1,149,780 ratings, including information such as User Id, user demographic (location, age), Book Title, Author, Year of Publication, Publisher, ISBN, URL links to the book cover image (in large, medium and small sizes) and the book rating on a scale from 1 to 10 (low to high).
+
+To create the recommender system, both content-based and collaborative-filtering algorithms will be used and compared, including but not limited to User-to-User Collaborative Filtering, Item-to-Item Collaborative Filtering, Singular Value Decomposition and Most Popular Items Recommendation. While performing an exploratory analysis on the ratings, a look into the dataset's locations and age groups will also be conducted to ascertain whether there is enough content to create recommendations taking into account places and age ranges.
+
+The implementation and evaluation will be performed in R and Apache Spark.
