@@ -9,7 +9,7 @@ output:
     code_folding: hide
 ---
 
-This purpose of this project was to work with a distributed recommender system. To do this, a previously adapted recommender system was compared to a recommender system created with Apache Spark. Things that were taken into consideration were the efficiency of the systems as well as Spark's complexity. This assignment was completed using sparklyr in R.
+The purpose of this project was to work with a distributed recommender system. To do this, a previously adapted recommender system was compared to a recommender system created with Apache Spark. Things that were taken into consideration were the efficiency of the systems as well as Spark's complexity. This assignment was completed using sparklyr in R.
 
 ## Data input
 
