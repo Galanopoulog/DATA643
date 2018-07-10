@@ -8,6 +8,4 @@
   For your given recommender system’s data, algorithm(s), and (envisioned) implementation, at what point would
   you see moving to a distributed platform such as Spark becoming necessary?
   
--The csv for the "Spark" section is a combination of the MovieLense ratings and movies csv's (also found in the
-Project 2 file, here: https://github.com/Galanopoulog/DATA643/tree/master/Project%202 )
   
