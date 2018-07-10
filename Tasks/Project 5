@@ -1,0 +1,6 @@
+Adapt a recommendation system to work with Apache Spark and compare the performance with previous iterations.
+Consider the efficiency of the system and the added complexity of using Spark.
+May use PySpark (Python), SparkR (R) , sparklyr (R), or Scala.
+Also, consider:
+  For your given recommender system’s data, algorithm(s), and (envisioned) implementation, at what 
+  point would you see moving to a distributed platform such as Spark becoming necessary?
