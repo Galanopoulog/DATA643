@@ -1,0 +1,318 @@
+---
+title: "Data 643 - Final Project"
+author: "Georgia Galanopoulos"
+date: "July 19, 2018"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_float: yes
+---
+The purpose of this project was to to build a recommender system and produce quality recommendations by extracting insights from a large dataset (one consisting of at least one million ratings or at least ten thousand users and ten thousand items). Because the dataset required was of such a size that a local machine could not handle the computations, the implementation and computation was to be done with Apache Spark in R (using sparklyr).
+
+To create the recommender system, both content-based and collaborative-filtering algorithms were used and compared, such as User-to-User Collaborative Filtering, Item-to-Item Collaborative Filtering, Singular Value Decomposition and Most Popular Items Recommendation. While performing an exploratory analysis on the ratings, a look into the dataset's locations and age groups was also  conducted to ascertain whether there was enough user content to create recommendations taking into account places and age ranges.
+
+# Data input
+
+The dataset used was the Book-Crossing dataset retrieved from http://www2.informatik.uni-freiburg.de/~cziegler/BX/.  This dataset is a compilation of user information, book information and book ratings (3 different datasets) mined in August-September of 2004 from the Book-Crossing community at http://www.bookcrossing.com/. It contains 278,858 users, 271,379 books and 1,149,780 ratings, including information such as User Id, user demographic (location, age), Book Title, Author, Year of Publication, Publisher, ISBN, URL links to the book cover image (in large, medium and small sizes) and the book rating on a scale from 1 to 10 (low to high).
+
+## Loading libraries/dataset
+```{r results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(recommenderlab)
+library(sparklyr)
+library(readr)
+library(knitr)
+```
+
+The Books dataset includes information such as the ISBN (used as an Item ID value), the book title and author. Information like the image URLs could be potentially used to create a recommender system by computing the similarity between book covers. For this project, though, this approach is a mere suggestion for future endeavors and not one that was implemented.
+```{r}
+books1 = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/Books_1.csv", header = T, sep = ";")
+books2 = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/Books_2.csv", header = F, sep = ";")
+books3 = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/Books_3.csv", header = F, sep = ";")
+colnames(books2) = colnames(books1)
+colnames(books3) = colnames(books1)
+books = rbind(books1, books2, books3)
+kable(head(books))
+```
+
+The Users dataset includes information such as the User ID (users remained anonymous), the user's location (of which the Country was probably the variable with the least factors compared to City and State and, hence, the most valuable) and the user's age.
+
+```{r}
+users = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/User.csv", header = T)
+users = subset(users, select = -X)
+kable(head(users))
+```
+
+The Ratings dataset includes information such as the User ID, the ISBN and the Book Rating. It is important to note at this point that the dataset includes zero values but it is yet unknown whether the zeroes are actual ratings or a representation of missing values. A case can be made for both sides at this point.
+
+```{r}
+ratings1 = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/Ratings_1.csv", header = T, sep = ";")
+ratings2 = read.csv("https://raw.githubusercontent.com/Galanopoulog/DATA643/master/Final/Ratings_2.csv", header = T, sep = ";")
+colnames(ratings2) = colnames(ratings1)
+ratings = rbind(ratings1, ratings2)
+kable(head(ratings))
+```
+
+The Ratings matrix was created using the ratings dataset.
+
+```{r}
+data = as(ratings, "realRatingMatrix")
+data
+```
+
+# Data Exploration
+## Ratings
+
+The heatmap of book ratings below may not seem particularly sparse, however, this is due to the inclusion of zero values as ratings. As was previously mentioned, the zero ratings could be indicative of a missing value rather than a low score. Without the inclusion of these values, the matrix would be very sparse.
+```{r}
+image(data, main = "Heatmap of Users and Book Items")
+```
+
+The histogram of the overall rating scores show that the zero values are more likely missing values. Without them, the rating scores have a more normal distribution. Just from this plot, a "good score" for a book could be a value of 8 and above.
+```{r}
+qplot(ratings$Book.Rating, geom="histogram", main = "Histogram of Ratings", xlab = "Rating Scores", binwidth = 0.5, fill=I("FireBrick"),col=I("black"))
+```
+
+The histogram of the rating scores per book also have too many zero entries further leading to the belief that they aren't ratings. Without them, books appear to have an almost uniform distribution. The sample of books for this matrix seems to be diverse. This may help the recommender models in the sense that there is a large enough pool of lower rated and higher rated books to evaluate.
+```{r}
+# Ratings per Book
+new = ratings %>% group_by(ISBN) %>%
+  summarise(count = mean(Book.Rating))
+qplot(new$count, geom="histogram", main = "Histogram of Book Ratings", xlab = "Average Rating Scores Per Book", binwidth = 0.5, fill=I("FireBrick"),col=I("black"))
+```
+
+The histogram of the ratings scores per user show, in addition to a high presence of zero entries, a high concentration of users who typically award lower scores and a low concentration but high frequency of users who award high scores (of 7 and above). This may be indicative of two types of individuals, those who consistently rate highly and those who consitently are more conservative with their ratings. As such, ensuring user bias does not permeate the dataset may be prudent.
+```{r}
+# Ratings per User
+new2 = ratings %>% group_by(User.ID) %>%
+  summarise(count = mean(Book.Rating))
+qplot(new2$count, geom="histogram", main = "Histogram of User Ratings", xlab = "Average Rating Scores Per User", binwidth = 0.25, fill=I("FireBrick"),col=I("black"))
+```
+
+Despite the assumption that the zero values are actually missing values, the zeroes were included as ratings into the matrix. Using them as a factor may not affect the system's ability to recommend higher rated movies to the users. The issue that may be presented is a lack of novelty for recommended items.
+
+## User
+
+Looking at the User dataset, it is interesting to note that there is a somewhat normal distribution of ages, with enough values for each decade to perhaps pursue incorporating age ranges into the recommender system. The average users are around the age of 50-60 years old, with some lower and higher outlies of ages "0" and "above 100" respectively. The concern with the distribution is the large number of ages above 100. If they were due to human error (which is highly likely), their removal would result in a skewed distribution. Nevertheless, binning the ages by decade could still prove valuable.
+```{r}
+# User Ages
+qplot(as.numeric(users$Age), geom="histogram", main = "Histogram of User Ages", xlab = "Ages", fill=I("Plum"),col=I("black"))
+```
+
+Creating an accurate histogram of the top user countries was a bit more difficult in the sense that a lot of the countries were either mispelled or accidentally had symbols in place of letters. Taking that into consideration, the majority of the users were from english-speaking countries (the U.S. leading by a large margin). If countries are significant factors for differences in score ratings, it may be worth considering location as a variable to add to the recommender systems.
+```{r}
+# User locations
+u1 = sort(table(users$Country), decreasing=TRUE)[1:20]
+barplot(u1, main = "Histogram of Top Countries for Users",las=2, col="Plum")
+```
+
+## Books
+
+Just looking at the Books dataset, the Top years books were published were between 1990-2000. The majority of the books sampled appeared to be more modern.
+```{r}
+# Top Years
+b1 = sort(table(books$Year.Of.Publication), decreasing=TRUE)[1:40]
+barplot(b1, main = "Histogram of Top Years of Publication", xlab = "Years",las=2, col="cornflower blue")
+```
+
+Something that may be of interest is to note the publishing companies. Looking at the number of books by each company, it may be interesting to include in a recommender system books by the same publishing company. For example, if a user is fond of Harlequin Publishing Company, it may be interesting to take into account other books publish by Harlequin.
+```{r}
+#Top Publishers
+b3 = sort(table(books$Publisher), decreasing=TRUE)[1:30]
+barplot(b3, main = "Histogram of Top Publishers",las=2, col="cornflower blue")
+```
+
+# Recommender System
+
+Because the dataset is too large to compute locally, the Apache Spark platform was to be used. Unfortunately, difficulties arose in the sense that, despite establishing a connection and loading the dataset onto the server, the functions to invoke a recommender system would not work. To compensate for this, an attempt was made to load the dataset onto the Amazon's AWS platform (an approach I'd be willing to pursue more given extra time), though difficulties were met there with connecting to the server. To compensate for these drawbacks, the dataset was reduced to R's handling capacity.
+```{r}
+#connect = spark_connect(master = "local")
+#rate = data.frame(subset(ratings, select = c("User.ID", "Book.Rating", "Book.ID")))
+#sparkData = copy_to(connect, rate, overwrite = TRUE)
+#sparkData
+#spark_disconnect(connect)
+```
+
+## Normalize Scores
+
+Scores were normalized to reduce user bias. The normalized scores showed an non-normal distribution, which could be indicative of a speculation created after seeing the average ratings by user, that two types of raters exist: consistently low-scoring and consistently high-scoring users.
+```{r}
+norm_data = normalize(data)
+hist(getRatings(data), breaks=100, xlab = "Ratings Scores", main = "Scores Histogram", col = "chartreuse3")
+hist(getRatings(norm_data), breaks=100, xlab = "Ratings Scores", main = "Normalized Scores Histogram", col = "chartreuse3")
+```
+
+The dataset was subsetted and the minimum number of rows were taken for later evaluation.
+```{r}
+dat = merge(ratings, books, by = "ISBN")
+dat = subset(dat, select = c("User.ID", "Book.Title", "Book.Rating"))
+data = as(dat, "realRatingMatrix")
+
+set.seed(121)
+data = data[rowCounts(data) > 5, colCounts(data) > 5]
+data = data[rowCounts(data) > 1, colCounts(data) > 1]
+data
+
+mins = min(rowCounts(data))
+print(paste0("Minimum number of ratings: ", min(rowCounts(data))))
+```
+
+The data was then split into training and testing set (80% vs 20% respectively).
+```{r}
+evaluation = evaluationScheme(data, method="split", train=0.8, given= (mins-1), goodRating=8)
+
+#Evaluation datasets
+ev_train = getData(evaluation, "train")
+ev_known = getData(evaluation, "known")
+ev_unknown = getData(evaluation, "unknown")
+```
+
+## User-Based
+Algorithm where books are recommended based on similarity between users
+```{r}
+ubcf_train = Recommender(ev_train, "UBCF")
+ubcf_preds = predict(ubcf_train, ev_known, type = "ratings")
+ubcf_preds
+```
+
+## Item-Based
+Algorithm where books are recommended based on similarity between books.
+```{r}
+ibcf_train = Recommender(ev_train, "IBCF")
+ibcf_preds = predict(ibcf_train, ev_known, type = "ratings")
+ibcf_preds
+```
+
+## Popular
+Algorithm where the most popular books are recommended.
+```{r}
+pop_train = Recommender(ev_train, "POPULAR")
+pop_preds = predict(pop_train, ev_known, type = "ratings")
+pop_preds
+```
+
+## SVD
+Algorithm using Singular Value Decomposition.
+```{r}
+svd_train = Recommender(ev_train, "SVD")
+svd_preds = predict(svd_train, ev_known, type = "ratings")
+svd_preds
+```
+
+
+# Evaluation
+
+Using RMSE, MSE and MAE values, the accuracy of each algorithm was used to evaluate the recommender systems' performance. The UBCF and SVD approaches performed the best, with almost similar results.
+```{r}
+accuracy = rbind(
+  IBCF = calcPredictionAccuracy(ibcf_preds, ev_unknown),
+  UBCF = calcPredictionAccuracy(ubcf_preds, ev_unknown),
+  POPULAR = calcPredictionAccuracy(pop_preds, ev_unknown),
+  SVD = calcPredictionAccuracy(svd_preds, ev_unknown)
+  )
+
+acc_tabl = round(as.data.frame(accuracy), 3)
+kable(acc_tabl[order(acc_tabl$RMSE),])
+```
+
+Selecting a user at random, the top ten recommendations using each algorithm (ICBF, UCBF, SVD and Popular) were compared to intuitively determine model performance. If, through different approaches, similar recommendations were made, the likelihood of that approach being "good" was increased. With that mentality, the best approach was the Popular method. Second came both the UCBF and the SVD (alternating depending on selected user) and last was the ICBF.
+```{r}
+# Comparing recommendations
+# Splitting training and testing
+values = sample(x = c(TRUE, FALSE), size = nrow(data), replace = TRUE, prob = c(0.8, 0.2))
+train = data[values, ]
+test = data[!values, ]
+
+# Item based
+item_item = Recommender(data = train, method = "IBCF",parameter = list(method = "cosine"))
+i_preds2 = predict(object = item_item, newdata = test, n = 10)
+
+item_pred = function(idNum){
+  user_x = i_preds2@items[[idNum]]
+  user_x = i_preds2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+
+# User based
+user_user = Recommender(data = train, method = "UBCF", parameter = list(method = "cosine"))
+u_preds2 = predict(object = user_user, newdata = test, n = 10)
+
+user_pred = function(idNum){
+  user_x = u_preds2@items[[idNum]]
+  user_x = u_preds2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+
+# Popular
+pop_pop = Recommender(data = train, method = "POPULAR")
+p_preds2 = predict(object = pop_pop, newdata = test, n = 10)
+
+pop_pred = function(idNum){
+  user_x = p_preds2@items[[idNum]]
+  user_x = p_preds2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+
+# SVD
+svd_svd = Recommender(data = train, method = "SVD")
+svd_preds2 = predict(object = svd_svd, newdata = test, n = 10)
+
+svd_pred = function(idNum){
+  user_x = svd_preds2@items[[idNum]]
+  user_x = svd_preds2@itemLabels[user_x]
+  return(data.frame(user_x))
+}
+
+# Recommendations for User X for each approach
+reccs = cbind(item_pred(1), user_pred(1), pop_pred(1), svd_pred(1))
+colnames(reccs) = c("User", "Popular", "SVD")
+reccs
+```
+
+Looking athe Precision/Recall plots and ROC curve plots, the Popular and SVD methods showed that the SVD approach worked best, with the Popular algorithm coming second and the IBCF third.Looking at the results overall, it appears that the Singular Value Decomposition recommender system most well-rounded.
+```{r}
+eval_sets = evaluationScheme(data = norm_data, method = "cross-validation", k=5, given=1, goodRating=8)
+
+mult_models = list(
+  IBCF = list(name = "IBCF", param = list(normalize = "Z-score", method = "cosine")),
+  UBCF = list(name = "UBCF", param = list(normalize = "Z-score", method = "cosine")),
+  Popular = list(name = "POPULAR", param = list(normalize = "Z-score")),
+  SVD = list(name = "SVD", param = list(normalize = "Z-score"))
+)
+```
+
+```{r}
+# Too large to plot
+
+# Testing models
+models = evaluate(eval_sets, mult_models, n= c(1, 5, seq(10, 100, 10)))
+
+# Plotting models
+#plot(models, annotate = T, legend="topleft")
+#plot(models, "prec/rec", annotate = F, main="Precision/Recall", ylim= c(0,0.5), legend="topright")
+```
+
+# Future Approaches
+
+One of the attributes to take into consideration is Age. By binning the age in year of ten ([0,10], [10,20], etc), a regression was performed to determine the significance of age and location on the book ratings,
+```{r}
+rate_use = merge(ratings, users, by = "User.ID")
+rate_use$AgeBins = findInterval(as.integer(rate_use$Age), seq(10, 100, 10))
+hist(rate_use$AgeBins)
+kable(head(rate_use))
+```
+
+Both variables were deemed relevant, though the Country variable may be somewhat suspect because of the dataset's uneven distribution of countries, in addition to human error such as mispelling country names and foreign characters translating into symbols.
+```{r}
+summary(lm(Book.Rating~ AgeBins + Country, data = rate_use))
+```
+
+# Conclusion
+
+After looking at the algorithms and the data, it would be preferable to use an SVD method or a User-to-User Collaborative Filter. Though the Popular algorithm may seem like the best in terms of it recommending books shown in both the UCBF and the SVD recommendation list (and thus appearing more well-rounded), when understanding how the Popular approach works (in that it relies heavily on the users' most-read books and therefore is not as personalized) it makes sense that it does not perform as well with this data. The books dataset includes novels from different countries, so books that may be popular in China may not be popular in Ireland. Because of the language and cultural barrier, book popularity alone does not appear to be a good enough attribute for each user. The reason why the Item-to-Item Collaborative Filter didn't perform as well also makes sense when looking at the datasets. Relevant attributes to feed to the recommender system were more available for users (Age, Location), rather than books (Publication Year, Publishing Company). As such, it was difficult for the model to determine similarities between novels. This was somewhat overcome using the SVD algorithm, which performed visibly better. This is why if one was to create a hybrid model or pursue using Age and Location to improve the model, it would be best to use the SVD and UCBF approach.
+
